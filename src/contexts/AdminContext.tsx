@@ -65,10 +65,39 @@ export const AdminProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // First try to sign in
+      let { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      // If user doesn't exist and this is the admin email, create it
+      if (error && email === 'pavan56@admin.local') {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (signUpData.user) {
+          // Add admin role
+          const { error: roleError } = await supabase
+            .from('user_roles')
+            .insert({ user_id: signUpData.user.id, role: 'admin' });
+
+          if (roleError) console.error('Role error:', roleError);
+
+          // Try to sign in again
+          const signInResult = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          
+          data = signInResult.data;
+          error = signInResult.error;
+        }
+      }
 
       if (error) throw error;
 
